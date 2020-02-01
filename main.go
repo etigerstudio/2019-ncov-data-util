@@ -27,7 +27,8 @@ func GenerateGlobalcitizenCSVFile(dataset []Data, directory string) {
 	const prefix = `# source: DXY @ https://3g.dxy.cn/newh5/view/pneumonia
 # update: `
 	const suffix = ` CST
-# place|confirmed_cases|deaths|notes|sources\n`
+# place|confirmed_cases|deaths|notes|sources
+`
 	provinceNameMap := map[string]string{
 		"青海省": "Qinghai",
 		"福建省": "Fujian",
