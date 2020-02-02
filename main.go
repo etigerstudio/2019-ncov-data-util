@@ -115,7 +115,7 @@ func extractRecord(provinceName string, dataItem *DataItem, provinceNameMap map[
 }
 
 func getFilename(timestamp time.Time) string {
-	return timestamp.Format("20060102-150405-dxy-2019ncov-data.csv")
+	return timestamp.Format("20060102-150405") + "-dxy-2019ncov-data.csv"
 }
 
 func getUpdateTimestamp(timestamp time.Time) string {
