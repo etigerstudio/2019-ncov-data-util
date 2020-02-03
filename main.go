@@ -19,6 +19,7 @@ type Data struct {
 type DataItem struct{
 	Confirmed string
 	Dead string
+	Comment string
 }
 
 func main()  {
@@ -69,15 +70,16 @@ func ParseIsaaclinJSONFile(filename string) []Data {
 
 		pushDataItem(timestamp, province, &prevTimestamp, &prevProvince, &n, &dataset,
 			strconv.Itoa(payload.Results[i].ConfirmedCount),
-			strconv.Itoa(payload.Results[i].DeadCount))
+			strconv.Itoa(payload.Results[i].DeadCount), payload.Results[i].Comment)
 	}
 
 	printDatasetDigest(dataset)
 	return dataset
 }
 
-func pushDataItem(timestamp string, province string, prevTimestamp *string,
-	prevProvince *string, n *int, dataset *[]Data, confirmed string, dead string) {
+func pushDataItem(timestamp string, province string,
+	prevTimestamp *string, prevProvince *string, n *int,
+	dataset *[]Data, confirmed string, dead string, comment string) {
 	if timestamp != *prevTimestamp {
 		*prevTimestamp = timestamp
 		*prevProvince = ""
@@ -101,6 +103,7 @@ func pushDataItem(timestamp string, province string, prevTimestamp *string,
 		(*dataset)[*n].Provinces[province] = DataItem{
 			Confirmed: confirmed,
 			Dead:      dead,
+			Comment:   comment,
 		}
 	}
 }
@@ -202,7 +205,7 @@ func extractRecord(provinceName string, dataItem *DataItem) []string {
 		provinceName,
 		dataItem.Confirmed,
 		dataItem.Dead,
-		"",
+		dataItem.Comment,
 		"",
 	}
 }
@@ -238,7 +241,7 @@ func ParseIsaaclinCSVFile(filename string) []Data {
 		province := getProvince(record)
 
 		pushDataItem(timestamp, province, &prevTimestamp, &prevProvince,
-			&n, &dataset, getConfirmed(record), getDead(record))
+			&n, &dataset, getConfirmed(record), getDead(record), "")
 	}
 
 	printDatasetDigest(dataset)
@@ -276,7 +279,8 @@ func compareData(prev *Data, next *Data) (equal bool) {
 		if !ok {
 			return false
 		}
-		if v1 != v2 {
+		// Ignoring comment data
+		if v1.Confirmed != v2.Confirmed || v1.Dead != v2.Dead {
 			return false
 		}
 	}
