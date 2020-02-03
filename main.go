@@ -2,15 +2,18 @@ package main
 
 import (
 	"encoding/csv"
+	"encoding/json"
+	"io/ioutil"
 	"log"
 	"os"
 	"path"
+	"strconv"
 	"time"
 )
 
 type Data struct {
-	timestamp string
-	provinces map[string]DataItem
+	Timestamp string
+	Provinces map[string]DataItem
 }
 
 type DataItem struct{
@@ -19,8 +22,96 @@ type DataItem struct{
 }
 
 func main()  {
-	dataset := ParseIsaaclinCSVFile("DXYArea.csv")
-	GenerateGlobalcitizenCSVFile(dataset, "dxy")
+	//TransformCSVToCSV("data/DXYArea.csv", "dxy")
+	TransformJSONToCSV("data/DXYArea.json", "dxy")
+}
+
+type DataRecord struct {
+	ProvinceName string
+	ConfirmedCount int
+	DeadCount int
+	Comment string
+	UpdateTime int64
+}
+
+type DataPayload struct {
+	Results []DataRecord
+	Success bool
+}
+
+func TransformJSONToCSV(filename string, outputDir string) {
+	dataset := ParseIsaaclinJSONFile(filename)
+	GenerateGlobalcitizenCSVFile(dataset, outputDir)
+}
+
+func ParseIsaaclinJSONFile(filename string) []Data {
+	bytes, err := ioutil.ReadFile(filename)
+	if err != nil {
+		log.Fatalln("cannot read json:", err)
+	}
+
+	var payload DataPayload
+	err = json.Unmarshal(bytes, &payload)
+	if err != nil {
+		log.Fatalln("cannot unmarshal json:", err)
+	}
+	if !payload.Success {
+		log.Fatalln("invalid payload")
+	}
+
+	dataset := []Data{}
+	var prevTimestamp string
+	var prevProvince string
+	n := -1
+	for i := len(payload.Results) - 1; i >= 0; i-- {
+		timestamp := timestampFromUnixTime(payload.Results[i].UpdateTime)
+		province := payload.Results[i].ProvinceName
+
+		pushDataItem(timestamp, province, &prevTimestamp, &prevProvince, &n, &dataset,
+			strconv.Itoa(payload.Results[i].ConfirmedCount),
+			strconv.Itoa(payload.Results[i].DeadCount))
+	}
+
+	printDatasetDigest(dataset)
+	return dataset
+}
+
+func pushDataItem(timestamp string, province string, prevTimestamp *string,
+	prevProvince *string, n *int, dataset *[]Data, confirmed string, dead string) {
+	if timestamp != *prevTimestamp {
+		*prevTimestamp = timestamp
+		*prevProvince = ""
+		if *n == -1 {
+			data := newDataVanilla(timestamp)
+			*dataset = append(*dataset, data)
+			*n = 0
+		} else {
+			// merge data if necessary
+			if *n < 1 || !compareData(&(*dataset)[*n - 1], &(*dataset)[*n]) {
+				data := newDataFromPrev(timestamp, &(*dataset)[*n])
+				*dataset = append(*dataset, data)
+				*n++
+			} else {
+				(*dataset)[*n].Timestamp = timestamp
+			}
+		}
+	}
+	if province != *prevProvince {
+		*prevProvince = province
+		(*dataset)[*n].Provinces[province] = DataItem{
+			Confirmed: confirmed,
+			Dead:      dead,
+		}
+	}
+}
+
+func timestampFromUnixTime(unix int64) string {
+	return time.Unix(unix / 1000, unix % 1000 * 1000).Format("2006-01-02 15:04:05.000")
+}
+
+func TransformCSVToCSV(filename string, outputDir string) {
+	dataset := ParseIsaaclinCSVFile(filename)
+	GenerateGlobalcitizenCSVFile(dataset, outputDir)
 }
 
 func GenerateGlobalcitizenCSVFile(dataset []Data, directory string) {
@@ -44,7 +135,7 @@ func GenerateGlobalcitizenCSVFile(dataset []Data, directory string) {
 		"上海市": "Shanghai",
 		"北京市": "Beijing",
 		"安徽省": "Anhui",
-		//"台湾": "Taiwan",
+		"台湾": "Taiwan",
 		"新疆维吾尔自治区": "Xinjiang",
 		"湖南省": "Hunan",
 		"吉林省": "Jilin",
@@ -67,7 +158,7 @@ func GenerateGlobalcitizenCSVFile(dataset []Data, directory string) {
 	}
 
 	for _, data := range dataset {
-		timestamp, err := time.Parse("2006-01-02 15:04:05.000", data.timestamp)
+		timestamp, err := time.Parse("2006-01-02 15:04:05.000", data.Timestamp)
 		if err != nil {
 			log.Fatalln("cannot parse timestamp:", err)
 		}
@@ -77,15 +168,20 @@ func GenerateGlobalcitizenCSVFile(dataset []Data, directory string) {
 			log.Fatalln("cannot create file:", err)
 		}
 
-		_, err = file.WriteString(prefix + getUpdateTimestamp(timestamp) + suffix)
+		_, err = file.WriteString(prefix + getOutputTimestamp(timestamp) + suffix)
 		if err != nil {
 			log.Fatalln("cannot write string:", err)
 		}
 
 		writer := csv.NewWriter(file)
 		writer.Comma = '|'
-		for k, v := range data.provinces {
-			err := writer.Write(extractRecord(k, &v, provinceNameMap))
+		for k, v := range data.Provinces {
+			province, ok := provinceNameMap[k]
+			if !ok {
+				//log.Println("province name key not found:", provinceName)
+				continue
+			}
+			err := writer.Write(extractRecord(province, &v))
 			if err != nil {
 				log.Fatalln("cannot write csv record:", err)
 			}
@@ -101,12 +197,9 @@ func GenerateGlobalcitizenCSVFile(dataset []Data, directory string) {
 	log.Println("converting finished:", len(dataset), "csv files generated")
 }
 
-func extractRecord(provinceName string, dataItem *DataItem, provinceNameMap map[string]string) []string {
-	//if provinceNameMap[provinceName] == "" {
-	//	log.Println("province name mismatch:", provinceName)
-	//}
+func extractRecord(provinceName string, dataItem *DataItem) []string {
 	return []string{
-		provinceNameMap[provinceName],
+		provinceName,
 		dataItem.Confirmed,
 		dataItem.Dead,
 		"",
@@ -118,7 +211,7 @@ func getFilename(timestamp time.Time) string {
 	return timestamp.Format("20060102-150405") + "-dxy-2019ncov-data.csv"
 }
 
-func getUpdateTimestamp(timestamp time.Time) string {
+func getOutputTimestamp(timestamp time.Time) string {
 	return timestamp.Format("2006-01-02 15:04:05")
 }
 
@@ -144,63 +237,42 @@ func ParseIsaaclinCSVFile(filename string) []Data {
 		timestamp := getTimestamp(record)
 		province := getProvince(record)
 
-		if timestamp != prevTimestamp {
-			prevTimestamp = timestamp
-			prevProvince = ""
-			var data Data
-			if n == -1 {
-				data = newDataVanilla(timestamp)
-				dataset = append(dataset, data)
-				n = 0
-			} else {
-				// merge data if necessary
-				if n < 1 || !compareData(&dataset[n - 1], &dataset[n]) {
-					data = newDataFromPrev(timestamp, &dataset[n])
-					dataset = append(dataset, data)
-					n++
-				} else {
-					dataset[n].timestamp = timestamp
-				}
-			}
-		}
-		if province != prevProvince {
-			prevProvince = province
-			dataset[n].provinces[province] = DataItem{
-				Confirmed: getConfirmed(record),
-				Dead:      getDead(record),
-			}
-		}
+		pushDataItem(timestamp, province, &prevTimestamp, &prevProvince,
+			&n, &dataset, getConfirmed(record), getDead(record))
 	}
 
-	log.Println("parsing finished:", len(dataset), "individual data generated")
-	log.Println("first:", dataset[0].timestamp)
-	log.Println("last:", dataset[len(dataset) - 1].timestamp)
-
+	printDatasetDigest(dataset)
 	return dataset
+}
+
+func printDatasetDigest(dataset []Data) {
+	log.Println("parsing finished:", len(dataset), "individual data generated")
+	log.Println("first:", dataset[0].Timestamp)
+	log.Println("last:", dataset[len(dataset) - 1].Timestamp)
 }
 
 func newDataVanilla(timestamp string) Data {
 	return Data{
-		timestamp: timestamp,
-		provinces: make(map[string]DataItem),
+		Timestamp: timestamp,
+		Provinces: make(map[string]DataItem),
 	}
 }
 
 func newDataFromPrev(timestamp string, prevData *Data) Data {
 	provinces := make(map[string]DataItem)
-	for k, v := range prevData.provinces {
+	for k, v := range prevData.Provinces {
 		provinces[k] = v
 	}
 
 	return Data{
-		timestamp: timestamp,
-		provinces: provinces,
+		Timestamp: timestamp,
+		Provinces: provinces,
 	}
 }
 
 func compareData(prev *Data, next *Data) (equal bool) {
-	for k, v1 := range next.provinces {
-		v2, ok := prev.provinces[k]
+	for k, v1 := range next.Provinces {
+		v2, ok := prev.Provinces[k]
 		if !ok {
 			return false
 		}
