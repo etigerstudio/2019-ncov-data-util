@@ -57,8 +57,8 @@ func pushDataItem(timestamp string, province string,
 			*dataset = append(*dataset, data)
 			*n = 0
 		} else {
-			// merge data if necessary
-			if *n < 1 || !compareData(&(*dataset)[*n - 1], &(*dataset)[*n]) {
+			// merge data if necessary (omitting comparison on comments)
+			if *n < 1 || !compareData(&(*dataset)[*n - 1], &(*dataset)[*n], true) {
 				data := newDataFromPrev(timestamp, &(*dataset)[*n])
 				*dataset = append(*dataset, data)
 				*n++
@@ -160,15 +160,18 @@ func GenerateGlobalcitizenCSVFile(dataset []Data, directory string) {
 	log.Println("converting finished:", len(dataset), "csv files generated")
 }
 
-func compareData(prev *Data, next *Data) (equal bool) {
+func compareData(prev *Data, next *Data, omittingComment bool) (equal bool) {
 	for k, v1 := range next.Provinces {
 		v2, ok := prev.Provinces[k]
 		if !ok {
 			return false
 		}
-		// Ignoring comment data
 		if v1.Confirmed != v2.Confirmed || v1.Dead != v2.Dead {
 			return false
+		} else {
+			if !omittingComment && v1.Comment != v2.Comment {
+				return false
+			}
 		}
 	}
 
