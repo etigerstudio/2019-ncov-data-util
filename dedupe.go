@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"log"
 	"os"
 	p "path"
@@ -54,22 +53,18 @@ func PerformDedupe(path string, usingModTime bool, omittingComment bool, maxCoun
 		lastData = prevData
 	}
 
-	//for _, filename := range pendingPurge {
-	//	purgeOneFetch(filename)
-	//}
+	for _, filename := range pendingPurge {
+		purgeOneFetch(filename)
+	}
 
 	if len(pendingPurge) > 0 {
-		logln("dedupe:", len(pendingPurge), "data purged:")
+		logln("gdedupe:", len(pendingPurge), "data purged:")
 		for _, filename := range pendingPurge {
 			logln(" -", filename)
 		}
 	} else {
-		logln("dedupe: duplicated data not found")
+		logln("gdedupe: duplicated data not found")
 	}
-}
-
-func logln(v ...interface{})  {
-	_, _ = fmt.Fprintln(os.Stderr, v...)
 }
 
 // usingModTime: use last time modified of files instead of time parsed from file names
