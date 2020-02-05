@@ -2,6 +2,8 @@
 
 Command line utility handling 2019-nCoV data conversion from [Isaac Lin](https://github.com/BlankerL)'s time series flow to individual csv records of [globalcitizen](https://github.com/globalcitizen/2019-wuhan-coronavirus-data/) whose format better suit needs of visualization as well as deduplication maintenance of globalcitizen's csv records. 
 
+[Download](https://github.com/etigerstudio/2019-ncov-data-util/releases) prebuilt binaries.
+
 ## Usage
 
 ```
@@ -61,3 +63,17 @@ e.g. `nutil gdedupe dxy` (scan entire `dxy` folder)
 [BlankerL/DXY-2019-nCoV-Crawler](https://github.com/BlankerL/DXY-2019-nCoV-Crawler) (data fetcher)<br/>
 [BlankerL/DXY-2019-nCoV-Data](https://github.com/BlankerL/DXY-2019-nCoV-Data) (data static repo)<br/>
 [lab.isaaclin.cn/nCoV/](https://lab.isaaclin.cn/nCoV/) (data dynamic provider API)
+
+## Run or Build from source
+
+Running:
+
+```
+go run .
+```
+
+Building:
+
+```
+go build -o nutil .
+```
